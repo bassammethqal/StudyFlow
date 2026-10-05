@@ -2,7 +2,19 @@ import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
 
-const API = import.meta.env.VITE_API_URL || (window.location.protocol.startsWith("http") ? "/api" : "http://localhost:4000/api");
+function resolveApiUrl() {
+  const env = (import.meta.env.VITE_API_URL || "").trim();
+  if (env) {
+    const clean = env.replace(/\/+$/, "");
+    return clean.endsWith("/api") ? clean : `${clean}/api`;
+  }
+  if (typeof window !== "undefined" && window.location) {
+    return "/api";
+  }
+  return "http://localhost:4000/api";
+}
+
+const API = resolveApiUrl();
 
 async function api(path, opt = {}) {
   const token = localStorage.getItem("sf_token");

@@ -3,17 +3,25 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "test": "node test_verify_e2e.mjs"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.2.0",
     "bcryptjs": "^3.0.2",
-    "better-sqlite3": "^11.8.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
-    "nodemailer": "^10.0.14"
+    "nodemailer": "^10.0.14",
+    "pg": "^8.23.1"
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^11.8.1"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   }
 }

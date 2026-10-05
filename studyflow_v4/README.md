@@ -1,6 +1,6 @@
 # StudyFlow 4.1
 
-منصة دراسة شخصية متكاملة Full-Stack للطلاب والجامعيين، مبنية بـ React + Vite وNode.js + Express وSQLite.
+منصة دراسة شخصية متكاملة Full-Stack للطلاب والجامعيين، مبنية بـ React + Vite وNode.js + Express وقاعدة بيانات **Neon PostgreSQL** مع دعم SQLite التلقائي للتطوير المحلي.
 
 ## المميزات والواقعية في 4.1
 - **لوحة تحكم ذكية (Dashboard)**: تنبيه فوري بالمهام المتأخرة، وعرض ذكي لـ **محاضرات اليوم** بحسب يوم الأسبوع الفعلي مع أوقاتها وقاعاتها.
@@ -9,8 +9,9 @@
 - **إدارة مواد احترافية**: نافذة تعديل سلسة مدمجة (بدل نوافذ المتصفح التقليدية)، وحساب دقيق يجمع بين تقدم المنهج الدراسي ونسبة إنجاز المهام والواجبات المرتبطة بكل مادة.
 - **جدول أسبوعي تفاعلي**: إبراز تلقائي لعمود "اليوم"، اختيار المادة من قائمة المواد المسجلة، وإمكانية تعديل الحصص وأوقاتها بسلاسة.
 - **ملف شخصي وإحصائيات شاملة**: إمكانية تغيير كلمة المرور بأمان، مسح المهام المكتملة دفعة واحدة، واستيراد خطة دراسية نموذجية للحسابات الجديدة.
+- **دعم Neon PostgreSQL السحابي**: دعم كامل ومباشر لقواعد بيانات Neon Serverless PostgreSQL مع SSL وإدارة اتصالات سريعة، مع بقاء خيار SQLite متاحاً محلياً.
 
-## التشغيل
+## التشغيل والتثبيت
 
 متطلبات: Node.js 18+.
 
@@ -19,22 +20,26 @@ npm install
 npm run install-all
 ```
 
-انسخ `server/.env.example` إلى `server/.env` وضع سر JWT قويًا:
+انسخ `server/.env.example` إلى `server/.env`:
 
 ```env
 PORT=4000
 JWT_SECRET=ضع_هنا_سرًا_عشوائيًا_طويلًا
 CLIENT_ORIGIN=http://localhost:5173
+
+# رابط قاعدة بيانات Neon PostgreSQL (اختياري - في حال تركه فارغاً سيعمل التطبيق على SQLite محلياً):
+DATABASE_URL=postgresql://[user]:[password]@[endpoint].neon.tech/[dbname]?sslmode=require
 ```
 
-ثم:
+ثم للتشغيل:
 
 ```bash
 npm run dev
 ```
 
-الواجهة: `http://localhost:5173`
-والـAPI: `http://localhost:4000`
+الواجهة: `http://localhost:5173`  
+الـAPI: `http://localhost:4000`
 
-## ملاحظة Production
-SQLite مناسبة للـMVP والـPortfolio المحلي. عند النشر الحقيقي على خدمة متعددة النسخ يُفضّل نقل قاعدة البيانات إلى PostgreSQL واستخدام HTTPS وCookies من نوع httpOnly بدل حفظ JWT في localStorage.
+## قاعدة البيانات (Database Architecture)
+- **Neon PostgreSQL (Production & Cloud)**: عند تمرير متغير `DATABASE_URL`، يتصل النظام تلقائياً بـ Neon عبر `pg.Pool` ويهيئ الجداول والفهارس والعلاقات تلقائياً.
+- **SQLite Fallback (Local Development)**: في حال عدم تمرير `DATABASE_URL`، يعمل النظام تلقائياً على ملف SQLite المحلي (`studyflow.db`) لتسهيل العمل دون اتصال بالإنترنت.
