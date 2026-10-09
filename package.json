@@ -5,6 +5,7 @@
     "dev": "npm run dev --prefix studyflow_v4",
     "start": "npm start --prefix studyflow_v4",
     "build": "npm run build --prefix studyflow_v4",
+    "test": "npm test --prefix studyflow_v4",
     "install-all": "npm run install-all --prefix studyflow_v4"
   }
 }

@@ -42,6 +42,424 @@ async function api(path, opt = {}) {
   }
 }
 
+// ==============================================================================
+// In-App Custom Dialog & Notification System (RTL Design System)
+// ==============================================================================
+
+const UIContext = React.createContext({
+  showToast: () => {},
+  showSuccess: () => {},
+  showError: () => {},
+  showWarning: () => {},
+  showInfo: () => {},
+  askConfirm: () => {},
+  askPrompt: () => {}
+});
+
+function useUI() {
+  return React.useContext(UIContext);
+}
+
+function ToastItem({ toast, onDismiss }) {
+  const [isPaused, setIsPaused] = useState(false);
+  const [progress, setProgress] = useState(100);
+
+  useEffect(() => {
+    if (!toast.duration || toast.duration <= 0) return;
+    const intervalTime = 50;
+    const step = (intervalTime / toast.duration) * 100;
+    const timer = setInterval(() => {
+      if (!isPaused) {
+        setProgress((prev) => {
+          if (prev <= step) {
+            clearInterval(timer);
+            onDismiss(toast.id);
+            return 0;
+          }
+          return prev - step;
+        });
+      }
+    }, intervalTime);
+    return () => clearInterval(timer);
+  }, [toast, isPaused, onDismiss]);
+
+  const icon =
+    toast.type === "success" ? "✓" :
+    toast.type === "error" ? "✕" :
+    toast.type === "warning" ? "⚠" : "ℹ";
+
+  return (
+    <div
+      className={`sf-toast-item sf-toast-${toast.type}`}
+      role={toast.type === "error" ? "alert" : "status"}
+      aria-live={toast.type === "error" ? "assertive" : "polite"}
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+    >
+      <div className="sf-toast-content">
+        <span className="sf-toast-icon" aria-hidden="true">{icon}</span>
+        <span className="sf-toast-msg">{toast.message}</span>
+      </div>
+      <button
+        type="button"
+        className="sf-toast-close"
+        onClick={() => onDismiss(toast.id)}
+        aria-label="إغلاق التنبيه"
+      >
+        ✕
+      </button>
+      {toast.duration > 0 && (
+        <div
+          className="sf-toast-progress"
+          style={{ width: `${progress}%` }}
+          aria-hidden="true"
+        />
+      )}
+    </div>
+  );
+}
+
+function ToastContainer({ toasts, onDismiss }) {
+  if (!toasts || !toasts.length) return null;
+  return (
+    <div
+      className="sf-toast-container"
+      role="region"
+      aria-label="الإشعارات والتنبيهات"
+      aria-live="polite"
+    >
+      {toasts.map((t) => (
+        <ToastItem key={t.id} toast={t} onDismiss={onDismiss} />
+      ))}
+    </div>
+  );
+}
+
+function ConfirmModal({ config, onClose }) {
+  const cancelBtnRef = React.useRef(null);
+  const confirmBtnRef = React.useRef(null);
+
+  useEffect(() => {
+    if (!config) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+        if (config.onCancel) config.onCancel();
+      }
+      if (e.key === "Tab") {
+        const focusable = [cancelBtnRef.current, confirmBtnRef.current].filter(Boolean);
+        if (focusable.length < 2) return;
+        if (e.shiftKey && document.activeElement === focusable[0]) {
+          e.preventDefault();
+          focusable[1].focus();
+        } else if (!e.shiftKey && document.activeElement === focusable[1]) {
+          e.preventDefault();
+          focusable[0].focus();
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    setTimeout(() => {
+      cancelBtnRef.current?.focus();
+    }, 50);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [config, onClose]);
+
+  if (!config) return null;
+
+  const isDanger = config.variant === "danger";
+  const isWarning = config.variant === "warning";
+  const isSuccess = config.variant === "success";
+  const icon = isDanger ? "⚠️" : isWarning ? "⚠️" : isSuccess ? "✓" : "ℹ️";
+  const badgeClass = isDanger ? "danger" : isWarning ? "warning" : isSuccess ? "success" : "primary";
+
+  const handleConfirm = async () => {
+    onClose();
+    if (config.onConfirm) await config.onConfirm();
+  };
+
+  const handleCancel = () => {
+    onClose();
+    if (config.onCancel) config.onCancel();
+  };
+
+  return (
+    <div
+      className="modal-overlay"
+      onClick={handleCancel}
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="confirm-modal-title"
+      aria-describedby="confirm-modal-desc"
+    >
+      <div className="modal-card confirm-modal-card" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <div className="confirm-icon-title">
+            <span className={`confirm-badge ${badgeClass}`} aria-hidden="true">
+              {icon}
+            </span>
+            <h3 id="confirm-modal-title">{config.title || "تأكيد الإجراء"}</h3>
+          </div>
+          <button className="ghost close-modal" onClick={handleCancel} aria-label="إغلاق النافذة">
+            ✕
+          </button>
+        </div>
+        <div className="modal-body">
+          <p id="confirm-modal-desc" className="confirm-modal-msg">
+            {config.message}
+          </p>
+        </div>
+        <div className="modal-foot">
+          <button
+            ref={cancelBtnRef}
+            type="button"
+            className="secondary-btn"
+            onClick={handleCancel}
+          >
+            {config.cancelText || "إلغاء"}
+          </button>
+          <button
+            ref={confirmBtnRef}
+            type="button"
+            className={isDanger ? "danger-btn" : isWarning ? "warning-btn" : "primary"}
+            onClick={handleConfirm}
+          >
+            {config.confirmText || "تأكيد"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PromptModal({ config, onClose }) {
+  const [val, setVal] = useState(config?.defaultValue || "");
+  const inputRef = React.useRef(null);
+  const cancelBtnRef = React.useRef(null);
+  const submitBtnRef = React.useRef(null);
+
+  useEffect(() => {
+    if (config) {
+      setVal(config.defaultValue || "");
+      setTimeout(() => inputRef.current?.focus(), 60);
+    }
+  }, [config]);
+
+  useEffect(() => {
+    if (!config) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+        if (config.onCancel) config.onCancel();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [config, onClose]);
+
+  if (!config) return null;
+
+  const handleSubmit = (e) => {
+    if (e) e.preventDefault();
+    onClose();
+    if (config.onConfirm) config.onConfirm(val);
+  };
+
+  const handleCancel = () => {
+    onClose();
+    if (config.onCancel) config.onCancel();
+  };
+
+  return (
+    <div
+      className="modal-overlay"
+      onClick={handleCancel}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="prompt-modal-title"
+      aria-describedby="prompt-modal-desc"
+    >
+      <div className="modal-card confirm-modal-card" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <div className="confirm-icon-title">
+            <span className="confirm-badge primary" aria-hidden="true">
+              ✏️
+            </span>
+            <h3 id="prompt-modal-title">{config.title || "إدخال نص"}</h3>
+          </div>
+          <button className="ghost close-modal" onClick={handleCancel} aria-label="إغلاق النافذة">
+            ✕
+          </button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body">
+            {config.message && (
+              <p id="prompt-modal-desc" className="confirm-modal-msg">
+                {config.message}
+              </p>
+            )}
+            <input
+              ref={inputRef}
+              type={config.inputType || "text"}
+              value={val}
+              onChange={(e) => setVal(e.target.value)}
+              placeholder={config.placeholder || ""}
+              style={{ width: "100%", marginTop: "6px" }}
+            />
+          </div>
+          <div className="modal-foot">
+            <button
+              ref={cancelBtnRef}
+              type="button"
+              className="secondary-btn"
+              onClick={handleCancel}
+            >
+              {config.cancelText || "إلغاء"}
+            </button>
+            <button
+              ref={submitBtnRef}
+              type="submit"
+              className="primary"
+            >
+              {config.confirmText || "موافق"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function UIProvider({ children }) {
+  const [toasts, setToasts] = useState([]);
+  const [confirmDialog, setConfirmDialog] = useState(null);
+  const [promptDialog, setPromptDialog] = useState(null);
+
+  const showToast = React.useCallback((message, type = "info", duration = 3500) => {
+    if (!message) return;
+    let inferredType = type;
+    if (type === "info") {
+      const text = String(message);
+      if (text.includes("✓") || text.includes("نجاح") || text.includes("أحسنت") || text.startsWith("تم ") || text.startsWith("تمت ")) {
+        inferredType = "success";
+      } else if (text.includes("خطأ") || text.includes("فشل") || text.includes("غير صحيحة") || text.toLowerCase().includes("error")) {
+        inferredType = "error";
+      } else if (text.includes("الرجاء") || text.includes("يجب") || text.includes("مطلوب") || text.includes("أولاً")) {
+        inferredType = "warning";
+      }
+    }
+
+    const id = Date.now() + Math.random();
+    setToasts((prev) => {
+      const next = [...prev, { id, message: String(message), type: inferredType, duration }];
+      return next.slice(-5);
+    });
+
+    return id;
+  }, []);
+
+  const showSuccess = React.useCallback((msg, dur) => showToast(msg, "success", dur), [showToast]);
+  const showError = React.useCallback((msg, dur) => showToast(msg, "error", dur), [showToast]);
+  const showWarning = React.useCallback((msg, dur) => showToast(msg, "warning", dur), [showToast]);
+  const showInfo = React.useCallback((msg, dur) => showToast(msg, "info", dur), [showToast]);
+
+  const dismissToast = React.useCallback((id) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  const askConfirm = React.useCallback(({
+    title,
+    message,
+    confirmText = "تأكيد",
+    cancelText = "إلغاء",
+    variant = "danger",
+    onConfirm,
+    onCancel
+  }) => {
+    setConfirmDialog({
+      title,
+      message,
+      confirmText,
+      cancelText,
+      variant,
+      onConfirm,
+      onCancel
+    });
+  }, []);
+
+  const closeConfirm = React.useCallback(() => {
+    setConfirmDialog(null);
+  }, []);
+
+  const askPrompt = React.useCallback(({
+    title,
+    message,
+    defaultValue = "",
+    placeholder = "",
+    confirmText = "موافق",
+    cancelText = "إلغاء",
+    inputType = "text",
+    onConfirm,
+    onCancel
+  }) => {
+    setPromptDialog({
+      title,
+      message,
+      defaultValue,
+      placeholder,
+      confirmText,
+      cancelText,
+      inputType,
+      onConfirm,
+      onCancel
+    });
+  }, []);
+
+  const closePrompt = React.useCallback(() => {
+    setPromptDialog(null);
+  }, []);
+
+  // Safety net: override native alert, confirm, and prompt to avoid any browser dialogs
+  useEffect(() => {
+    window.alert = (msg) => {
+      showToast(String(msg), "warning");
+    };
+
+    window.confirm = (msg) => {
+      console.warn("Blocked native window.confirm call:", msg);
+      showToast(String(msg), "warning");
+      return false;
+    };
+
+    window.prompt = (msg) => {
+      console.warn("Blocked native window.prompt call:", msg);
+      showToast(String(msg), "warning");
+      return null;
+    };
+  }, [showToast]);
+
+  return (
+    <UIContext.Provider
+      value={{
+        showToast,
+        showSuccess,
+        showError,
+        showWarning,
+        showInfo,
+        askConfirm,
+        askPrompt
+      }}
+    >
+      {children}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+      <ConfirmModal config={confirmDialog} onClose={closeConfirm} />
+      <PromptModal config={promptDialog} onClose={closePrompt} />
+    </UIContext.Provider>
+  );
+}
+
 const priorityLabel = { high: "عالية", medium: "متوسطة", low: "منخفضة" };
 const ARABIC_DAYS = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 
@@ -130,6 +548,7 @@ function playChime() {
 }
 
 function Auth({ onLogin }) {
+  const { showToast } = useUI();
   const [mode, setMode] = useState("login");
   const [f, setF] = useState({ name: "", email: "", password: "" });
   const [resetEmail, setResetEmail] = useState("");
@@ -160,6 +579,26 @@ function Auth({ onLogin }) {
   }
 
   async function handleAuth() {
+    if (mode === "register" && !f.name.trim()) {
+      setErr("الرجاء إدخال الاسم الكامل");
+      showToast("الرجاء إدخال الاسم الكامل", "warning");
+      return;
+    }
+    if (!f.email.trim()) {
+      setErr("الرجاء إدخال البريد الإلكتروني");
+      showToast("الرجاء إدخال البريد الإلكتروني", "warning");
+      return;
+    }
+    if (!f.password) {
+      setErr("الرجاء إدخال كلمة المرور");
+      showToast("الرجاء إدخال كلمة المرور", "warning");
+      return;
+    }
+    if (mode === "register" && f.password.length < 6) {
+      setErr("كلمة المرور يجب ألا تقل عن 6 أحرف");
+      showToast("كلمة المرور يجب ألا تقل عن 6 أحرف", "warning");
+      return;
+    }
     setErr("");
     setSuccess("");
     setBusy(true);
@@ -171,9 +610,16 @@ function Auth({ onLogin }) {
       });
       localStorage.setItem("sf_token", x.token);
       localStorage.setItem("sf_user", JSON.stringify(x.user));
+      showToast(
+        mode === "register"
+          ? "تم إنشاء الحساب بنجاح! مرحباً بك في StudyFlow 🎉"
+          : `مرحباً بك مجدداً، ${x.user?.name || ""}! 👋`,
+        "success"
+      );
       onLogin(x.user);
     } catch (e) {
       setErr(e.message);
+      showToast(e.message || "حدث خطأ في المصادقة", "error");
     } finally {
       setBusy(false);
     }
@@ -182,6 +628,7 @@ function Auth({ onLogin }) {
   async function handleForgotPassword() {
     if (!resetEmail.trim()) {
       setErr("الرجاء إدخال البريد الإلكتروني");
+      showToast("الرجاء إدخال البريد الإلكتروني", "warning");
       return;
     }
     setErr("");
@@ -194,6 +641,7 @@ function Auth({ onLogin }) {
         body: JSON.stringify({ email: resetEmail.trim() })
       });
       setSuccess(res.message);
+      showToast(res.message || "تم إرسال رمز التحقق بنجاح ✓", "success");
       if (res.devCode) {
         setDevCode(res.devCode);
         setResetCode(res.devCode);
@@ -201,6 +649,7 @@ function Auth({ onLogin }) {
       setMode("reset");
     } catch (e) {
       setErr(e.message);
+      showToast(e.message || "تعذر إرسال رمز التحقق", "error");
     } finally {
       setBusy(false);
     }
@@ -209,14 +658,17 @@ function Auth({ onLogin }) {
   async function handleResetPassword() {
     if (!resetEmail.trim() || !resetCode.trim() || !newPassword) {
       setErr("الرجاء إدخال البريد الإلكتروني ورمز التحقق وكلمة المرور الجديدة");
+      showToast("الرجاء إدخال البريد الإلكتروني ورمز التحقق وكلمة المرور الجديدة", "warning");
       return;
     }
     if (newPassword.length < 6) {
       setErr("كلمة المرور الجديدة يجب ألا تقل عن 6 أحرف");
+      showToast("كلمة المرور الجديدة يجب ألا تقل عن 6 أحرف", "warning");
       return;
     }
     if (newPassword !== confirmPassword) {
       setErr("كلمتا المرور غير متطابقتين");
+      showToast("كلمتا المرور غير متطابقتين", "warning");
       return;
     }
     setErr("");
@@ -232,10 +684,12 @@ function Auth({ onLogin }) {
         })
       });
       setSuccess(res.message);
+      showToast(res.message || "تم تغيير كلمة المرور بنجاح! يمكنك الآن تسجيل الدخول ✓", "success");
       setF({ ...f, email: resetEmail, password: "" });
       setMode("login");
     } catch (e) {
       setErr(e.message);
+      showToast(e.message || "تعذر إعادة تعيين كلمة المرور", "error");
     } finally {
       setBusy(false);
     }
@@ -401,6 +855,7 @@ function Auth({ onLogin }) {
 }
 
 function App({ user, onLogout }) {
+  const { showToast, askConfirm } = useUI();
   const [currentUser, setCurrentUser] = useState(user);
   const [page, setPage] = useState("dashboard");
   const [tasks, setTasks] = useState([]);
@@ -409,7 +864,6 @@ function App({ user, onLogout }) {
   const [stats, setStats] = useState({});
   const [profile, setProfile] = useState(null);
   const [dark, setDark] = useState(localStorage.getItem("sf_dark") === "1");
-  const [toast, setToast] = useState("");
   const [loading, setLoading] = useState(true);
 
   // Task form state
@@ -473,7 +927,7 @@ function App({ user, onLogout }) {
       if (err.status === 401 || err.message === "UNAUTHORIZED") {
         onLogout();
       } else {
-        note(err.message || "تعذر الاتصال بالخادم");
+        showToast(err.message || "تعذر الاتصال بالخادم", "error");
       }
     } finally {
       setLoading(false);
@@ -483,6 +937,28 @@ function App({ user, onLogout }) {
   useEffect(() => {
     load();
   }, []);
+
+  // Synchronize document.body with dark mode
+  useEffect(() => {
+    if (dark) {
+      document.body.classList.add("dark");
+    } else {
+      document.body.classList.remove("dark");
+    }
+  }, [dark]);
+
+  // Keyboard accessibility: close open modals on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        if (editingSubject) setEditingSubject(null);
+        if (editingSchedule) setEditingSchedule(null);
+        if (editingTask) setEditingTask(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [editingSubject, editingSchedule, editingTask]);
 
   // Pomodoro countdown effect
   useEffect(() => {
@@ -503,7 +979,7 @@ function App({ user, onLogout }) {
 
   async function handleFocusSessionComplete() {
     if (focusMode === "pomodoro") {
-      note("🎉 أحسنت! اكتملت جلسة التركيز بنجاح وتم تسجيل وقت دراستك!");
+      showToast("🎉 أحسنت! اكتملت جلسة التركيز بنجاح وتم تسجيل وقت دراستك!", "success");
       try {
         await api("/focus", {
           method: "POST",
@@ -517,9 +993,10 @@ function App({ user, onLogout }) {
         refreshStats();
       } catch (e) {
         console.error("Focus log error:", e);
+        showToast("تعذر تسجيل وقت التركيز: " + (e.message || "خطأ غير متوقع"), "error");
       }
     } else {
-      note("☕ انتهت فترة الاستراحة! هل أنت مستعد للتركيز مجدداً؟");
+      showToast("☕ انتهت فترة الاستراحة! هل أنت مستعد للتركيز مجدداً؟", "info");
     }
   }
 
@@ -536,9 +1013,8 @@ function App({ user, onLogout }) {
     setSec(mins * 60);
   }
 
-  function note(x) {
-    setToast(x);
-    setTimeout(() => setToast(""), 2600);
+  function note(x, type = "info") {
+    showToast(x, type);
   }
 
   function go(p) {
@@ -555,7 +1031,7 @@ function App({ user, onLogout }) {
 
   // --- Task Handlers ---
   async function addTask() {
-    if (!task.name.trim()) return note("اكتب اسم المهمة أولاً");
+    if (!task.name.trim()) return showToast("اكتب اسم المهمة أولاً", "warning");
     try {
       const x = await api("/tasks", {
         method: "POST",
@@ -574,10 +1050,10 @@ function App({ user, onLogout }) {
         estimatedMinutes: 30,
         subjectId: ""
       });
-      note("تمت إضافة المهمة ✓");
+      showToast("تمت إضافة المهمة بنجاح ✓", "success");
       refreshStats();
     } catch (e) {
-      note(e.message);
+      showToast(e.message || "تعذر إضافة المهمة", "error");
     }
   }
 
@@ -589,21 +1065,34 @@ function App({ user, onLogout }) {
       });
       setTasks(tasks.map((a) => (a.id === t.id ? x : a)));
       refreshStats();
+      if (!t.done) {
+        showToast("أحسنت! تم إكمال المهمة بنجاح 🎯", "success");
+      } else {
+        showToast("تمت إعادة تعيين المهمة كغير منجزة", "info");
+      }
     } catch (e) {
-      note(e.message);
+      showToast(e.message || "تعذر تحديث حالة المهمة", "error");
     }
   }
 
-  async function removeTask(id) {
-    if (!confirm("حذف هذه المهمة نهائياً؟")) return;
-    try {
-      await api("/tasks/" + id, { method: "DELETE" });
-      setTasks(tasks.filter((x) => x.id !== id));
-      note("تم حذف المهمة");
-      refreshStats();
-    } catch (e) {
-      note(e.message);
-    }
+  function removeTask(id) {
+    askConfirm({
+      title: "حذف المهمة",
+      message: "هل أنت متأكد من حذف هذه المهمة نهائياً؟ لا يمكن التراجع عن هذا الإجراء.",
+      confirmText: "نعم، احذف المهمة",
+      cancelText: "إلغاء",
+      variant: "danger",
+      onConfirm: async () => {
+        try {
+          await api("/tasks/" + id, { method: "DELETE" });
+          setTasks(tasks.filter((x) => x.id !== id));
+          showToast("تم حذف المهمة بنجاح ✓", "success");
+          refreshStats();
+        } catch (e) {
+          showToast(e.message || "تعذر حذف المهمة", "error");
+        }
+      }
+    });
   }
 
   function startEditTask(t) {
@@ -619,7 +1108,7 @@ function App({ user, onLogout }) {
   }
 
   async function updateTask() {
-    if (!editingTask || !editingTask.name.trim()) return note("اكتب اسم المهمة أولاً");
+    if (!editingTask || !editingTask.name.trim()) return showToast("اكتب اسم المهمة أولاً", "warning");
     try {
       const x = await api("/tasks/" + editingTask.id, {
         method: "PATCH",
@@ -634,28 +1123,40 @@ function App({ user, onLogout }) {
       });
       setTasks(tasks.map((a) => (a.id === editingTask.id ? x : a)));
       setEditingTask(null);
-      note("تم تعديل المهمة ✓");
+      showToast("تم تعديل المهمة بنجاح ✓", "success");
       refreshStats();
     } catch (e) {
-      note(e.message);
+      showToast(e.message || "تعذر تعديل المهمة", "error");
     }
   }
 
-  async function clearCompletedTasks() {
-    if (!confirm("هل تريد مسح جميع المهام المكتملة؟")) return;
-    try {
-      const res = await api("/tasks", { method: "DELETE" });
-      setTasks(tasks.filter((t) => !t.done));
-      note(`تم مسح ${res.removed || 0} مهمة مكتملة`);
-      refreshStats();
-    } catch (e) {
-      note(e.message);
+  function clearCompletedTasks() {
+    if (done === 0) {
+      showToast("لا توجد مهام مكتملة لمسحها", "info");
+      return;
     }
+    askConfirm({
+      title: "مسح جميع المهام المكتملة",
+      message: `هل تريد بالتأكيد مسح جميع المهام المكتملة (${done} مهمة) نهائياً؟`,
+      confirmText: "مسح الكل",
+      cancelText: "إلغاء",
+      variant: "danger",
+      onConfirm: async () => {
+        try {
+          const res = await api("/tasks", { method: "DELETE" });
+          setTasks(tasks.filter((t) => !t.done));
+          showToast(`تم مسح ${res?.removed || done} مهمة مكتملة بنجاح ✓`, "success");
+          refreshStats();
+        } catch (e) {
+          showToast(e.message || "تعذر مسح المهام المكتملة", "error");
+        }
+      }
+    });
   }
 
   // --- Subject Handlers ---
   async function addSubject() {
-    if (!subject.name.trim()) return note("اكتب اسم المادة");
+    if (!subject.name.trim()) return showToast("اكتب اسم المادة أولاً", "warning");
     try {
       const x = await api("/subjects", {
         method: "POST",
@@ -667,10 +1168,10 @@ function App({ user, onLogout }) {
       });
       setSubjects([...subjects, { ...x, totalTasks: 0, completedTasks: 0, taskProgress: 0 }]);
       setSubject({ name: "", code: "", progress: 0 });
-      note("تمت إضافة المادة ✓");
+      showToast("تمت إضافة المادة الدراسية بنجاح ✓", "success");
       refreshStats();
     } catch (e) {
-      note(e.message);
+      showToast(e.message || "تعذر إضافة المادة", "error");
     }
   }
 
@@ -684,7 +1185,7 @@ function App({ user, onLogout }) {
   }
 
   async function saveSubjectEdit() {
-    if (!editingSubject || !editingSubject.name.trim()) return note("اسم المادة مطلوب");
+    if (!editingSubject || !editingSubject.name.trim()) return showToast("اسم المادة مطلوب", "warning");
     try {
       const x = await api("/subjects/" + editingSubject.id, {
         method: "PATCH",
@@ -696,34 +1197,42 @@ function App({ user, onLogout }) {
       });
       setSubjects(subjects.map((s) => (s.id === editingSubject.id ? { ...s, ...x } : s)));
       setEditingSubject(null);
-      note("تم تعديل المادة ✓");
+      showToast("تم تعديل بيانات المادة بنجاح ✓", "success");
       refreshStats();
     } catch (e) {
-      note(e.message);
+      showToast(e.message || "تعذر تعديل المادة", "error");
     }
   }
 
-  async function removeSubject(id) {
-    if (!confirm("حذف هذه المادة؟ المهام المرتبطة بها ستبقى بدون مادة.")) return;
-    try {
-      await api("/subjects/" + id, { method: "DELETE" });
-      setSubjects(subjects.filter((x) => x.id !== id));
-      setTasks(
-        tasks.map((t) =>
-          t.subjectId === id ? { ...t, subjectId: null, subjectName: null } : t
-        )
-      );
-      refreshStats();
-      note("تم حذف المادة");
-    } catch (e) {
-      note(e.message);
-    }
+  function removeSubject(id) {
+    askConfirm({
+      title: "حذف المادة الدراسية",
+      message: "هل تريد حذف هذه المادة؟ ستظل المهام السابقة المرتبطة بها محفوظة بدون مادة.",
+      confirmText: "نعم، احذف المادة",
+      cancelText: "إلغاء",
+      variant: "danger",
+      onConfirm: async () => {
+        try {
+          await api("/subjects/" + id, { method: "DELETE" });
+          setSubjects(subjects.filter((x) => x.id !== id));
+          setTasks(
+            tasks.map((t) =>
+              t.subjectId === id ? { ...t, subjectId: null, subjectName: null } : t
+            )
+          );
+          refreshStats();
+          showToast("تم حذف المادة بنجاح ✓", "success");
+        } catch (e) {
+          showToast(e.message || "تعذر حذف المادة", "error");
+        }
+      }
+    });
   }
 
   // --- Schedule Handlers ---
   async function addSchedule() {
-    if (!sch.subject.trim()) return note("اكتب أو اختر اسم المادة للحصة");
-    if (sch.startTime >= sch.endTime) return note("وقت النهاية يجب أن يكون بعد وقت البداية");
+    if (!sch.subject.trim()) return showToast("اكتب أو اختر اسم المادة للحصة", "warning");
+    if (sch.startTime >= sch.endTime) return showToast("وقت نهاية الحصة يجب أن يكون بعد وقت بدايتها", "warning");
     try {
       const x = await api("/schedule", {
         method: "POST",
@@ -737,9 +1246,9 @@ function App({ user, onLogout }) {
         endTime: "10:30",
         room: ""
       });
-      note("تمت إضافة الحصة في الجدول ✓");
+      showToast("تمت إضافة الحصة في الجدول بنجاح ✓", "success");
     } catch (e) {
-      note(e.message);
+      showToast(e.message || "تعذر إضافة الحصة", "error");
     }
   }
 
@@ -755,9 +1264,9 @@ function App({ user, onLogout }) {
   }
 
   async function saveScheduleEdit() {
-    if (!editingSchedule || !editingSchedule.subject.trim()) return note("اسم المادة مطلوب");
+    if (!editingSchedule || !editingSchedule.subject.trim()) return showToast("اسم المادة مطلوب", "warning");
     if (editingSchedule.startTime >= editingSchedule.endTime) {
-      return note("وقت النهاية يجب أن يكون بعد وقت البداية");
+      return showToast("وقت نهاية الحصة يجب أن يكون بعد وقت بدايتها", "warning");
     }
     try {
       const res = await api("/schedule/" + editingSchedule.id, {
@@ -766,26 +1275,34 @@ function App({ user, onLogout }) {
       });
       setSchedule(schedule.map((x) => (x.id === editingSchedule.id ? res : x)));
       setEditingSchedule(null);
-      note("تم تعديل بيانات الحصة ✓");
+      showToast("تم تعديل بيانات الحصة بنجاح ✓", "success");
     } catch (e) {
-      note(e.message);
+      showToast(e.message || "تعذر تعديل بيانات الحصة", "error");
     }
   }
 
-  async function removeSchedule(id) {
-    if (!confirm("حذف هذه الحصة من الجدول؟")) return;
-    try {
-      await api("/schedule/" + id, { method: "DELETE" });
-      setSchedule(schedule.filter((x) => x.id !== id));
-      note("تم حذف الحصة");
-    } catch (e) {
-      note(e.message);
-    }
+  function removeSchedule(id) {
+    askConfirm({
+      title: "حذف الحصة من الجدول",
+      message: "هل أنت متأكد من حذف هذه الحصة من الجدول الأسبوعي؟",
+      confirmText: "حذف الحصة",
+      cancelText: "إلغاء",
+      variant: "danger",
+      onConfirm: async () => {
+        try {
+          await api("/schedule/" + id, { method: "DELETE" });
+          setSchedule(schedule.filter((x) => x.id !== id));
+          showToast("تم حذف الحصة بنجاح ✓", "success");
+        } catch (e) {
+          showToast(e.message || "تعذر حذف الحصة", "error");
+        }
+      }
+    });
   }
 
   // --- Profile Handlers ---
   async function saveProfile() {
-    if (!editName.trim()) return note("الاسم مطلوب");
+    if (!editName.trim()) return showToast("الاسم مطلوب", "warning");
     try {
       const x = await api("/profile", {
         method: "PATCH",
@@ -795,21 +1312,21 @@ function App({ user, onLogout }) {
       const u = { ...currentUser, name: x.name };
       setCurrentUser(u);
       localStorage.setItem("sf_user", JSON.stringify(u));
-      note("تم تحديث الاسم بنجاح ✓");
+      showToast("تم تحديث الاسم بنجاح ✓", "success");
     } catch (e) {
-      note(e.message);
+      showToast(e.message || "تعذر تحديث الاسم", "error");
     }
   }
 
   async function handleChangePassword() {
     if (!pwdForm.currentPassword || !pwdForm.newPassword) {
-      return note("الرجاء إدخال كلمة المرور الحالية والجديدة");
+      return showToast("الرجاء إدخال كلمة المرور الحالية والجديدة", "warning");
     }
     if (pwdForm.newPassword.length < 6) {
-      return note("كلمة المرور الجديدة يجب ألا تقل عن 6 أحرف");
+      return showToast("كلمة المرور الجديدة يجب ألا تقل عن 6 أحرف", "warning");
     }
     if (pwdForm.newPassword !== pwdForm.confirmPassword) {
-      return note("كلمتا المرور الجديدتان غير متطابقتين");
+      return showToast("كلمتا المرور الجديدتان غير متطابقتين", "warning");
     }
     try {
       const res = await api("/profile/password", {
@@ -819,10 +1336,10 @@ function App({ user, onLogout }) {
           newPassword: pwdForm.newPassword
         })
       });
-      note(res.message || "تم تغيير كلمة المرور بنجاح ✓");
+      showToast(res.message || "تم تغيير كلمة المرور بنجاح ✓", "success");
       setPwdForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
     } catch (e) {
-      note(e.message);
+      showToast(e.message || "تعذر تغيير كلمة المرور", "error");
     }
   }
 
@@ -857,6 +1374,20 @@ function App({ user, onLogout }) {
     ["stats", "▣", "الإحصائيات"],
     ["profile", "●", "الملف الشخصي"]
   ];
+
+  function handleLogout() {
+    askConfirm({
+      title: "تسجيل الخروج",
+      message: "هل تريد بالتأكيد تسجيل الخروج من حسابك في StudyFlow؟",
+      confirmText: "تسجيل الخروج",
+      cancelText: "البقاء",
+      variant: "danger",
+      onConfirm: () => {
+        onLogout();
+        showToast("تم تسجيل الخروج بنجاح 👋", "info");
+      }
+    });
+  }
 
   if (loading) return <div className="loading">جاري تجهيز StudyFlow...</div>;
 
@@ -914,7 +1445,7 @@ function App({ user, onLogout }) {
             >
               {dark ? "☀" : "☾"}
             </button>
-            <button className="ghost logout" onClick={onLogout}>
+            <button className="ghost logout" onClick={handleLogout}>
               ↪ خروج
             </button>
           </div>
@@ -1484,8 +2015,22 @@ function App({ user, onLogout }) {
                 <button
                   className="ghost"
                   onClick={() => {
-                    setRunning(false);
-                    setSec(focusDuration * 60);
+                    if (running) {
+                      askConfirm({
+                        title: "إعادة ضبط المؤقت",
+                        message: "جلسة التركيز قيد التشغيل حالياً. هل أنت متأكد من إعادة ضبط المؤقت وإلغاء تقدم الجلسة الحالية؟",
+                        confirmText: "نعم، أعد الضبط",
+                        cancelText: "متابعة التركيز",
+                        variant: "warning",
+                        onConfirm: () => {
+                          setRunning(false);
+                          setSec(focusDuration * 60);
+                          showToast("تمت إعادة ضبط المؤقت", "info");
+                        }
+                      });
+                    } else {
+                      setSec(focusDuration * 60);
+                    }
                   }}
                 >
                   ↺ إعادة ضبط
@@ -1584,7 +2129,6 @@ function App({ user, onLogout }) {
           </section>
         )}
       </main>
-      {toast && <div className="toast">{toast}</div>}
     </div>
   );
 }
@@ -1839,13 +2383,23 @@ function Root() {
     }
   });
 
+  useEffect(() => {
+    if (localStorage.getItem("sf_dark") === "1") {
+      document.body.classList.add("dark");
+    }
+  }, []);
+
   function out() {
     localStorage.removeItem("sf_token");
     localStorage.removeItem("sf_user");
     setU(null);
   }
 
-  return u ? <App user={u} onLogout={out} /> : <Auth onLogin={setU} />;
+  return (
+    <UIProvider>
+      {u ? <App user={u} onLogout={out} /> : <Auth onLogin={setU} />}
+    </UIProvider>
+  );
 }
 
 createRoot(document.getElementById("root")).render(<Root />);
