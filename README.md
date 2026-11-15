@@ -1,71 +1,119 @@
-# 🎓 StudyFlow 4.1
+<div align="center">StudyFlow 4.1
 
-منصة دراسية متكاملة للطلاب والجامعيين (Full-Stack Student OS) لإدارة المهام، متابعة المناهج الدراسية، تنظيم الجدول الأسبوعي، وجلسات التركيز (Pomodoro)، مدعومة بقواعد بيانات **Neon PostgreSQL** السحابية ومجهزة للنشر.
+Your Academic Life, Organized.
 
----
+A full-stack student management platform designed to help university students organize their academic life, manage coursework, track progress, and build productive study habits.
 
-## 🚀 المميزات الرئيسية
+Powered by React, Node.js, Express, and Neon PostgreSQL.
 
-- **لوحة تحكم ذكية (Dashboard)**: تنبيهات فورية بالمهام المتأخرة، وعرض ذكي لجدول محاضرات اليوم حسب يوم الأسبوع.
-- **إدارة المهام (Task Management)**: أولويات متباينة (عالية / متوسطة / منخفضة)، تواريخ استحقاق ذكية، وربط المهام بالمواد الدراسية.
-- **متابعة المقررات الدراسية (Subjects)**: تتبع نسبة إنجاز المنهج إلى جانب نسبة إتمام المهام والواجبات المرتبطة بكل مقرر.
-- **الجدول الأسبوعي (Weekly Schedule)**: تنظيم الحصص والمحاضرات والقاعات مع تمييز تلقائي لليوم الحالي.
-- **مؤقت بومودورو للتركيز (Pomodoro Focus Timer)**: فترات تركيز متعددة واستراحات مع نغمات تنبيه صوتية (Web Audio API) واحتساب آلي لساعات الدراسة.
-- **أمان ومصادقة (Auth & Security)**: مصادقة كاملة عبر JWT، تشفير كلمات المرور باستخدام Bcrypt، واستعادة كلمة المرور عبر الرمز السري.
-- **دعم Neon PostgreSQL**: ترحيل كامل يدعم Neon PostgreSQL عبر `DATABASE_URL` مع الحفاظ على التوافق المحلي.
-- **الوضع الليلي (Dark Mode)**: تصميم عصري مريح للعين مع تبديل فوري.
+"Live Demo" (https://study-flow-mu-pearl.vercel.app/) · "Report an Issue" (https://github.com/bassammethqal/StudyFlow/issues)
 
----
+</div>---
 
-## 🛠 التقنيات المستخدمة
+Overview
 
-- **الواجهة الأمامية (Frontend)**: React 18، Vite، Vanilla CSS بتصميم حديث.
-- **الخادم الخلفي (Backend)**: Node.js، Express 5، CORS، Helmet.
-- **قاعدة البيانات (Database)**: **Neon PostgreSQL** عبر `pg.Pool` (مع دعم SQLite تلقائي للتطوير دون إنترنت).
+StudyFlow brings essential academic management tools into one platform. It helps students stay organized, monitor their academic progress, manage their schedules, and maintain focused study sessions.
 
----
+The application uses Neon PostgreSQL as its primary cloud database, with automatic SQLite fallback for local development.
 
-## 💻 التثبيت والتشغيل المحلي
+Features
 
-### المتطلبات
-- **Node.js** (الإصدار 18 أو أحدث).
-- **npm**.
+Feature| Description
+Dashboard| View academic activity, overdue tasks, and daily schedules.
+Task Management| Create and organize tasks with priorities and due dates.
+Subject Tracking| Monitor course progress and task completion.
+Weekly Schedule| Organize lectures, classes, and rooms.
+Pomodoro Timer| Manage focus sessions and breaks with audio notifications.
+Authentication| JWT authentication, password hashing, and password recovery.
+Dark Mode| Switch to a comfortable dark interface.
+Cloud Database| Connect to Neon PostgreSQL through environment configuration.
 
-### 1. تثبيت الحزم
-من المجلد الرئيسي للمشروع:
-```bash
+Technology Stack
+
+Layer| Technologies
+Frontend| React 18, Vite, CSS
+Backend| Node.js, Express 5
+Security| JWT, Bcrypt, Helmet
+Database| Neon PostgreSQL, SQLite fallback
+Deployment| Vercel
+
+Getting Started
+
+Prerequisites
+
+- Node.js 18 or later
+- npm
+- Git
+
+1. Clone the repository
+
+git clone https://github.com/bassammethqal/StudyFlow.git
+cd StudyFlow
+
+2. Install dependencies
+
 npm run install-all
-```
 
-### 2. ضبط متغيرات البيئة
-انسخ ملف الإعدادات النموذجي داخل مجلد الخادم:
-```bash
-# في Windows (PowerShell):
+3. Configure environment variables
+
+Create your environment file from the provided example.
+
+Windows PowerShell:
+
 Copy-Item studyflow_v4/server/.env.example studyflow_v4/server/.env
 
-# أو في Linux / macOS:
+Linux / macOS:
+
 cp studyflow_v4/server/.env.example studyflow_v4/server/.env
-```
 
-عند استخدام قاعدة بيانات سحابية من [Neon](https://neon.tech)، أضف رابط الاتصال في `studyflow_v4/server/.env`:
-```env
-DATABASE_URL=postgresql://[user]:[password]@[endpoint].neon.tech/[dbname]?sslmode=require
-```
-*(ملاحظة: إذا تُرِك `DATABASE_URL` فارغاً، سيعمل التطبيق تلقائياً على قاعدة بيانات SQLite المحلية للتطوير).*
+To use Neon PostgreSQL, configure the following variable in:
 
-### 3. بدء التشغيل
-```bash
+"studyflow_v4/server/.env"
+
+DATABASE_URL=your_neon_postgresql_connection_string
+
+Replace the placeholder with your actual Neon connection string.
+
+«If "DATABASE_URL" is left empty, the application automatically uses a local SQLite database for development.»
+
+4. Run the application
+
 npm run dev
-```
 
-- رابط واجهة التطبيق: [http://localhost:5173](http://localhost:5173)
-- رابط الخادم (API): [http://localhost:4000](http://localhost:4000)
+The application services are available at:
 
-*(يمكن لمستخدمي Windows أيضاً النقر المزدوج على ملف `Start-StudyFlow.bat` أو `تشغيل-StudyFlow.bat` للتشغيل بنقرة واحدة).*
+Service| URL
+Frontend| http://localhost:5173
+Backend API| http://localhost:4000
+
+Windows users: You can also launch the application using "Start-StudyFlow.bat" or "تشغيل-StudyFlow.bat".
+
+Security
+
+StudyFlow follows basic security practices:
+
+- JWT-based authentication.
+- Password hashing using Bcrypt.
+- Sensitive environment variables are stored in ".env".
+- Local database files ("*.db") and environment files (".env") are excluded from Git.
+- An ".env.example" template is provided for configuration.
+
+Never commit your database credentials, secrets, or private API keys.
+
+Project Information
+
+Item| Details
+Project| StudyFlow
+Version| 4.1
+Type| Full-Stack Student Management Platform
+Primary Database| Neon PostgreSQL
+Local Development Database| SQLite
+Repository| bassammethqal/StudyFlow
 
 ---
 
-## 🔒 الأمان وحماية البيانات
+<div align="center">Built to make student life more organized.
 
-- تم استبعاد ملفات قاعدة البيانات المحلية (`*.db`) وملفات البيئة الحساسة (`.env`) تلقائياً عبر `.gitignore` لضمان عدم تسريب أي بيانات خاصة أو أسرار عند الرفع إلى GitHub.
-- ملف الإعدادات النموذجي `.env.example` متوفر ومتاح للاستخدام الآمن.
+Developed by "Bassam Methqal" (https://github.com/bassammethqal)
+
+</div>
